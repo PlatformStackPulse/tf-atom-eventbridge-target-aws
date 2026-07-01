@@ -3,9 +3,40 @@
 [![CI](https://github.com/PlatformStackPulse/tf-atom-eventbridge-target-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/PlatformStackPulse/tf-atom-eventbridge-target-aws/actions/workflows/ci.yml)
 ![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.6.0-blueviolet)
 
-## Purpose
+Terraform atom that attaches a target (Lambda, SQS, SNS, Step Functions, etc.) to an
+AWS EventBridge (CloudWatch Events) rule, with optional input transformation, a dead-letter
+queue, and a retry policy.
 
-Terraform atom: AWS EventBridge Target - connects a rule to a target service.
+## Features
+
+- **Rule-to-target wiring** — creates an `aws_cloudwatch_event_target` binding a rule to any supported target ARN.
+- **Custom event bus** — targets the `default` bus or any named custom event bus via `event_bus_name`.
+- **Input control** — pass a static JSON `input` or extract a slice of the event with `input_path`.
+- **Delivery hardening** — optional dead-letter queue (`dead_letter_arn`) and retry policy (`maximum_retry_attempts`, `maximum_event_age_in_seconds`).
+- **Cross-account / assumed-role delivery** — optional `role_arn` for the invocation role.
+- **tf-label identity** — `target_id` is derived from the standard tf-label context, so ids follow the `namespace-stage-name` convention.
+- **enable/disable toggle** — set `enabled = false` to remove the target without deleting the module block.
+
+## Usage
+
+```hcl
+module "orders_target" {
+  source = "git::https://github.com/PlatformStackPulse/tf-atom-eventbridge-target-aws.git?ref=v1.0.0"
+
+  # tf-label identity
+  namespace = "eg"
+  stage     = "prod"
+  name      = "orders"
+
+  # required
+  rule_name  = "orders-created"
+  target_arn = "arn:aws:lambda:us-east-1:123456789012:function:process-orders"
+
+  # optional delivery hardening
+  dead_letter_arn        = "arn:aws:sqs:us-east-1:123456789012:eventbridge-dlq"
+  maximum_retry_attempts = 3
+}
+```
 
 ## Module Documentation
 
@@ -72,3 +103,21 @@ Terraform atom: AWS EventBridge Target - connects a rule to a target service.
 |------|-------------|
 | <a name="output_enabled"></a> [enabled](#output\_enabled) | Whether the module is enabled |
 <!-- END_TF_DOCS -->
+
+## Tests
+
+Unit tests run against a mocked AWS provider (no real AWS calls, no credentials) and
+assert on plan-known values — the tf-label id, planned resource count, and input
+pass-throughs.
+
+```bash
+# unit tests (mocked provider)
+terraform init -backend=false
+terraform test -test-directory=tests/unit
+
+# via Makefile
+make test-unit
+```
+
+Integration tests (requiring real AWS credentials) live under `tests/integration` and can
+be run with `terraform test -test-directory=tests/integration` or `make test-integration`.
